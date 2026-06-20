@@ -191,10 +191,10 @@ function draw() {
   }
 
   // Draw color legend bar
-  const legendX = W - 40;
-  const legendY = 30;
-  const legendH = H - 60;
-  const legendW = 15;
+  const legendX = W - 70;
+  const legendY = 50;
+  const legendH = H - 120;
+  const legendW = 18;
 
   const gradient = ctx.createLinearGradient(0, legendY, 0, legendY + legendH);
   gradient.addColorStop(0, 'rgb(255,0,0)');
@@ -209,12 +209,8 @@ function draw() {
   ctx.lineWidth = 1;
   ctx.strokeRect(legendX, legendY, legendW, legendH);
 
-  // Legend labels
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'left';
-
-  let maxVal = 0, minVal = 0;
+  // Legend data
+  let maxVal = 0;
   if (store.result) {
     switch (store.heatmapMode) {
       case 'stress':
@@ -232,19 +228,85 @@ function draw() {
   const unit = store.heatmapMode === 'stress' ? 'MPa' :
     store.heatmapMode === 'strain' ? '%' : 'kN';
 
-  ctx.textAlign = 'right';
-  ctx.fillText(`${maxVal.toExponential(1)} ${unit}`, legendX - 4, legendY + 8);
-  ctx.fillText('0', legendX - 4, legendY + legendH);
+  const modeLabel = store.heatmapMode === 'stress' ? '应力' :
+    store.heatmapMode === 'strain' ? '应变' : '轴力';
 
-  // Mode label
-  ctx.save();
-  ctx.translate(legendX + legendW + 10, legendY + legendH / 2);
-  ctx.rotate(-Math.PI / 2);
+  function formatValue(v: number): string {
+    if (v === 0) return '0';
+    if (Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + 'k';
+    if (Math.abs(v) < 0.01) return v.toExponential(1);
+    return v.toFixed(2);
+  }
+
+  function formatDisplayValue(v: number): string {
+    if (store.heatmapMode === 'stress') {
+      return (v / 1e6).toFixed(1);
+    } else if (store.heatmapMode === 'strain') {
+      return (v * 100).toFixed(3);
+    } else {
+      return (v / 1000).toFixed(1);
+    }
+  }
+
+  // Unit header
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#64748b';
-  ctx.font = '11px sans-serif';
-  ctx.fillText(store.heatmapMode.toUpperCase(), 0, 0);
-  ctx.restore();
+  ctx.fillText(`${modeLabel} (${unit})`, legendX + legendW / 2, legendY - 14);
+
+  // Danger zone indicator (top 20% of bar)
+  const dangerH = legendH * 0.2;
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(legendX - 1, legendY - 1, legendW + 2, dangerH + 2);
+
+  // Danger label
+  ctx.fillStyle = '#fca5a5';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('⚠ 危险', legendX + legendW + 6, legendY + 12);
+
+  // Danger threshold line
+  const dangerY = legendY + dangerH;
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(legendX - 8, dangerY);
+  ctx.lineTo(legendX + legendW, dangerY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Segmented ticks (6 ticks = 5 segments)
+  const numTicks = 6;
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+
+  for (let i = 0; i < numTicks; i++) {
+    const ratio = i / (numTicks - 1);
+    const y = legendY + ratio * legendH;
+    const value = maxVal * (1 - ratio);
+
+    // Tick mark
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(legendX - 5, y);
+    ctx.lineTo(legendX, y);
+    ctx.stroke();
+
+    // Tick label
+    const displayVal = formatDisplayValue(value);
+    ctx.fillStyle = ratio <= 0.2 ? '#fca5a5' : '#94a3b8';
+    ctx.fillText(displayVal, legendX - 8, y + 3);
+  }
+
+  // Safe zone label at bottom
+  ctx.fillStyle = '#86efac';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('安全', legendX + legendW + 6, legendY + legendH - 4);
 }
 
 function handleMouseDown(e: MouseEvent) {
